@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesan Terakhir - Papan Tulis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1a1b; /* Chalkboard dark green/black */
+            font-family: 'Caveat', cursive;
+        }
+
+        #chalkboard {
+            display: block;
+            filter: url(#chalk-filter);
+        }
+
+        .container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            padding: 20px;
+        }
+
+        .message-box {
+            margin-top: 10px;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 1.8rem;
+            line-height: 1.2;
+            text-align: center;
+            max-width: 500px;
+            opacity: 0;
+            transition: opacity 2s ease;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        @media (min-width: 768px) {
+            .message-box {
+                font-size: 2.5rem;
+                max-width: 800px;
+            }
+        }
+
+        .show {
+            opacity: 1;
+        }
+
+        #next-btn {
+            position: absolute;
+            bottom: 5vh;
+            padding: 12px 30px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.7);
+            pointer-events: auto;
+            cursor: pointer;
+            border-radius: 30px;
+            transition: all 0.3s;
+            font-size: 1.2rem;
+            backdrop-filter: blur(5px);
+            z-index: 100;
+        }
+
+        #next-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-color: white;
+        }
+
+        #next-btn:disabled {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Modal Popups */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.92);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            transition: opacity 1s ease;
+        }
+
+        .modal-content {
+            background: #1a1a1b;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 2.5rem;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 350px;
+            width: 90%;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        .modal-title {
+            color: white;
+            font-size: 1.6rem;
+            margin-bottom: 1.5rem;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.4;
+        }
+
+        .modal-btns {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 25px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: white;
+            color: black;
+            border: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .hidden-modal {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Popup Awal: Hook Penasaran -->
+    <div id="start-popup" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title">Sebelum koneksi ini benar-benar terputus... maukah kamu mendengarkan apa yang belum sempat aku katakan?</h2>
+            <div class="modal-btns">
+                <button id="btn-start" class="modal-btn btn-primary">Ya, aku mau</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup Akhir: Bujukan Lagu -->
+    <div id="final-popup" class="modal-overlay hidden-modal">
+        <div class="modal-content">
+            <h2 id="final-title" class="modal-title">Aku punya satu lagu buat kamu. Mau dengerin?</h2>
+            <div class="modal-btns">
+                <button id="btn-final-yes" class="modal-btn btn-primary">Ya</button>
+                <button id="btn-final-no" class="modal-btn btn-secondary">Enggak</button>
+            </div>
+        </div>
+    </div>
+
+    <svg style="display:none;">
+        <filter id="chalk-filter">
+            <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" />
+        </filter>
+    </svg>
+
+    <canvas id="chalkboard"></canvas>
+
+    <div class="container">
+        <div id="message" class="message-box"></div>
+        <button id="next-btn" style="display: none;">Ketuk untuk membaca...</button>
+    </div>
+
+    <!-- Background Music -->
+    <audio id="bg-music" loop preload="auto">
+        <source src="https://files.catbox.moe/kix9p1.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('chalkboard');
+        const ctx = canvas.getContext('2d');
+        const messageEl = document.getElementById('message');
+        const nextBtn = document.getElementById('next-btn');
+        const bgMusic = document.getElementById('bg-music');
+        
+        const startPopup = document.getElementById('start-popup');
+        const btnStart = document.getElementById('btn-start');
+        
+        const finalPopup = document.getElementById('final-popup');
+        const finalTitle = document.getElementById('final-title');
+        const btnFinalYes = document.getElementById('btn-final-yes');
+        const btnFinalNo = document.getElementById('btn-final-no');
+
+        let currentScene = 0;
+        let isDrawing = false;
+        
+        const persuasions = [
+            "Beneran gamau?",
+            "Cuma bentar kok, please...",
+            "Satu kali ini aja, buat terakhir kali?",
+            "Aku mohon, sekali ini aja dengerin ya?",
+            "Yakin nih? Ini lagu yang aku maksud tadi...",
+            "Please... dengerin ya?"
+        ];
+        let persuasionIndex = 0;
+
+        const scenes = [
+            {
+                text: "Aku sayang banget sama kamu.\nSampai detik ini, rasa itu tidak pernah berkurang sedikit pun.",
+                draw: drawHeart
+            },
+            {
+                text: "Tapi kamu butuh kepastian yang belum bisa aku beri.\nAda mimpi yang harus kukejar, ada tangga yang harus kupanjat dulu.",
+                draw: drawRocket
+            },
+            {
+                text: "Memaksamu menunggu ketidakpastianku adalah hal yang jahat.\nJadi, aku melepasmu agar kamu bisa menemukan bahagia yang lebih nyata.",
+                draw: drawPaths
+            },
+            {
+                text: "Terima kasih sudah pernah menjadi bagian dari sistem hidupku.\nSelamat tinggal, semoga bahagiamu segera bertemu.",
+                draw: drawGoodbye
+            }
+        ];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            clearBoard();
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        function clearBoard() {
+            ctx.fillStyle = '#1a1a1b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            for(let i=0; i<2000; i++) {
+                ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.015})`;
+                ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
+            }
+        }
+
+        function chalkPoint(x, y, opacity = 0.6) {
+            const size = Math.random() * 2 + 1;
+            const alpha = opacity * (0.4 + Math.random() * 0.6);
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x + (Math.random()-0.5)*2, y + (Math.random()-0.5)*2, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        async function animatePath(points) {
+            isDrawing = true;
+            for(let i=0; i<points.length - 1; i++) {
+                const p1 = points[i];
+                const p2 = points[i+1];
+                const dist = Math.sqrt((p2.x-p1.x)**2 + (p2.y-p1.y)**2);
+                const steps = dist / 2;
+
+                for(let s=0; s<=steps; s++) {
+                    const x = p1.x + (p2.x-p1.x) * (s/steps);
+                    const y = p1.y + (p2.y-p1.y) * (s/steps);
+                    chalkPoint(x, y);
+                    if (s % 2 === 0) await new Promise(r => setTimeout(r, 1));
+                }
+            }
+            isDrawing = false;
+        }
+
+        function getCenter() {
+            const isMobile = window.innerWidth < 768;
+            return { 
+                x: canvas.width / 2, 
+                y: isMobile ? canvas.height / 2 - 80 : canvas.height / 2 - 120 
+            };
+        }
+
+        function drawHeart() {
+            const center = getCenter();
+            const points = [];
+            const scale = window.innerWidth < 768 ? 8 : 12;
+            for (let t = 0; t <= Math.PI * 2; t += 0.05) {
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+                points.push({ x: center.x + x * scale, y: center.y + y * scale });
+            }
+            return animatePath(points);
+        }
+
+        function drawRocket() {
+            const center = getCenter();
+            const s = window.innerWidth < 768 ? 0.7 : 1;
+            const points = [
+                {x: center.x, y: center.y - 60*s}, 
+                {x: center.x + 30*s, y: center.y + 20*s},
+                {x: center.x + 30*s, y: center.y + 60*s},
+                {x: center.x - 30*s, y: center.y + 60*s},
+                {x: center.x - 30*s, y: center.y + 20*s},
+                {x: center.x, y: center.y - 60*s},
+                {x: center.x - 30*s, y: center.y + 40*s}, {x: center.x - 50*s, y: center.y + 65*s},
+                {x: center.x - 30*s, y: center.y + 60*s},
+                {x: center.x + 30*s, y: center.y + 40*s}, {x: center.x + 50*s, y: center.y + 65*s},
+                {x: center.x + 30*s, y: center.y + 60*s}
+            ];
+            return animatePath(points);
+        }
+
+        function drawPaths() {
+            const center = getCenter();
+            const s = window.innerWidth < 768 ? 0.8 : 1.2;
+            const points = [
+                {x: center.x, y: center.y + 80*s},
+                {x: center.x, y: center.y + 20*s},
+                {x: center.x - 60*s, y: center.y - 40*s},
+                {x: center.x - 70*s, y: center.y - 50*s}
+            ];
+            animatePath(points);
+            const points2 = [
+                {x: center.x, y: center.y + 20*s}, 
+                {x: center.x + 60*s, y: center.y - 40*s},
+                {x: center.x + 70*s, y: center.y - 50*s}
+            ];
+            return animatePath(points2);
+        }
+
+        function drawGoodbye() {
+            const center = getCenter();
+            const s = window.innerWidth < 768 ? 0.8 : 1.2;
+            const points = [];
+            for(let t=0; t<=Math.PI*2; t+=0.1) {
+                points.push({x: center.x + Math.cos(t)*50*s, y: center.y + Math.sin(t)*50*s});
+            }
+            points.push({x: center.x - 30*s, y: center.y}, {x: center.x + 30*s, y: center.y});
+            return animatePath(points);
+        }
+
+        async function runScene() {
+            if (currentScene >= scenes.length) {
+                nextBtn.disabled = true;
+                clearBoard();
+                messageEl.textContent = "Koneksi terputus. Menghapus jejak...";
+                setTimeout(() => {
+                    // Tampilkan popup final
+                    finalPopup.classList.remove('hidden-modal');
+                }, 1500);
+                return;
+            }
+
+            const scene = scenes[currentScene];
+            nextBtn.disabled = true;
+            nextBtn.textContent = "Menulis...";
+            
+            clearBoard();
+            messageEl.classList.remove('show');
+            
+            await new Promise(r => setTimeout(r, 800));
+            await scene.draw();
+            
+            setTimeout(() => {
+                messageEl.textContent = scene.text;
+                messageEl.classList.add('show');
+                nextBtn.disabled = false;
+                nextBtn.textContent = currentScene === scenes.length - 1 ? "Selesaikan" : "Lanjut...";
+                currentScene++;
+            }, 600);
+        }
+
+        // Handler Start Popup
+        btnStart.addEventListener('click', () => {
+            startPopup.classList.add('hidden-modal');
+            bgMusic.play().catch(e => console.log("Audio failed to start"));
+            nextBtn.style.display = 'block';
+            setTimeout(runScene, 500);
+        });
+
+        // Handler Final Popup
+        btnFinalYes.addEventListener('click', () => {
+            window.location.href = 'https://www.youtube.com/watch?v=lHFOzj1_suE&list=RDlHFOzj1_suE&start_radio=1';
+        });
+
+        btnFinalNo.addEventListener('click', () => {
+            finalTitle.textContent = persuasions[persuasionIndex];
+            persuasionIndex = (persuasionIndex + 1) % persuasions.length;
+            // Geser sedikit posisi tombol biar susah diklik atau cuma ganti teks
+            btnFinalNo.style.transform = `scale(${1 - (persuasionIndex * 0.05)})`;
+        });
+
+        nextBtn.addEventListener('click', runScene);
+
+        window.onload = () => {
+            clearBoard();
+        };
+    </script>
+</body>
+</html>
